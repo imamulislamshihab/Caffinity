@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Track order | Caffinity</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-root="">
+    <header class="site-header">
+        <div class="container header-inner">
+            <a class="brand" href="index.html"><span class="brand-cup" aria-hidden="true">☕</span>Caffinity</a>
+            <button class="nav-toggle" type="button" aria-label="Open menu" aria-expanded="false">☰</button>
+            <nav class="site-nav" aria-label="Main">
+            <a href="index.html">Home</a>
+            <a href="menu.html">Menu</a>
+            <a href="reservation.html">Reserve a table</a>
+            <a href="track-order.html" class="active" aria-current="page">Track order</a>
+                <a href="cart.html" class="cart-link">Cart <span class="cart-count" id="cart-count" hidden>0</span></a>
+                <div class="account-links" id="account-links"></div>
+            </nav>
+        </div>
+    </header>
+
+    <main class="page">
+        <div class="container" style="max-width:760px">
+            <div class="page-head">
+                <h1>Track your order</h1>
+                <p>This page updates by itself every few seconds.</p>
+            </div>
+
+            <div class="table-banner hidden" id="placed-banner">Order placed. The kitchen has received it.</div>
+
+            <form class="card row" id="find-form" style="margin-bottom:20px" novalidate>
+                <div class="form-group" style="flex:1;margin:0">
+                    <label for="order-id">Order number</label>
+                    <input type="text" id="order-id" placeholder="e.g. 2001">
+                    <p class="error"></p>
+                </div>
+                <button type="submit" class="btn btn-dark" style="align-self:end">Track</button>
+            </form>
+
+            <div class="card hidden" id="order-card"></div>
+
+            <section class="card" id="active-list" style="margin-top:20px">
+                <h2 class="card-title">Your active orders</h2>
+                <div id="active-orders"></div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container row-between">
+            <span>© 2026 Caffinity. Coffee, comfort food and more.</span>
+            <span><a href="menu.html">Menu</a> &nbsp; <a href="reservation.html">Reservations</a> &nbsp; <a href="login.html">Staff login</a></span>
+        </div>
+    </footer>
+    <script src="js/data.js"></script>
+    <script src="js/main.js"></script>
+    <script>
+
+        const user = requireRole(["customer"]);
+        setupPublicHeader();
+
+        const STEPS = {
+            delivery: [["New", "Order placed"], ["Preparing", "Being prepared"], ["Ready", "Ready for the rider"],
+                       ["Picked Up", "Picked up by the rider"], ["Out for Delivery", "Out for delivery"], ["Delivered", "Delivered"]],
+            pickup:   [["New", "Order placed"], ["Preparing", "Being prepared"], ["Ready", "Ready to collect at the counter"], ["Completed", "Collected"]],
+            dine_in:  [["New", "Order placed"], ["Preparing", "Being prepared"], ["Ready", "Ready, coming to your table"], ["Completed", "Served"]]
+        };
+
+        const params = new URLSearchParams(location.search);
+        let currentId = params.get("id");
+        if (params.get("placed")) document.getElementById("placed-banner").classList.remove("hidden");
+
+        function myOrders() {
+            return dbGet("orders", []).filter(o => user && o.customerId === user.id);
+        }
+
+        function renderOrder() {
+            const box = document.getElementById("order-card");
+            if (!currentId) { box.classList.add("hidden"); return; }
+            const order = myOrders().find(o => String(o.id) === String(currentId));
+            box.classList.remove("hidden");
+            if (!order) {
+                box.innerHTML = '<p class="empty">We could not find order #' + escapeHtml(currentId) + " in your account. Check the number and try again.</p>";
+                return;
+            }
+            document.getElementById("order-id").value = order.id;
+
+            let stepsHtml;
+            if (order.status === "Cancelled") {
+                stepsHtml = '<p class="error">This order was cancelled by the cafe. Contact us if you have already paid.</p>';
+            } else {
+                const steps = STEPS[order.type];
+                const at = steps.findIndex(s => s[0] === order.status);
+                stepsHtml = '<ol class="steps">' + steps.map((s, i) =>
+                    '<li class="' + (i < at ? "done" : i === at ? "done current" : "") + '">' + s[1] +
+                    (s[0] === "Preparing" && order.prepMinutes && i === at ? " (about " + order.prepMinutes + " minutes)" : "") +
+                    "</li>").join("") + "</ol>";
+            }
+
+            const rider = order.riderId ? getUsers().find(u => u.id === order.riderId) : null;
+            box.innerHTML =
+                '<div class="row-between"><h2 style="margin:0">Order #' + order.id + "</h2>" + statusBadge(order.status) + "</div>" +
+                '<p class="muted small" style="margin:4px 0 0">' + ORDER_TYPE_LABEL[order.type] +
+                    (order.tableNo ? ", Table " + escapeHtml(order.tableNo) : "") + ", placed " + formatDateTime(order.createdAt) + "</p>" +
+                stepsHtml +
+                (rider && order.type === "delivery" ? '<p class="small">Your rider: <strong>' + escapeHtml(rider.name) + "</strong>, " + rider.phone + "</p>" : "") +
+                order.items.map(i => '<div class="summary-row"><span>' + i.qty + " × " + escapeHtml(i.name) + "</span><span>" + formatTk(i.price * i.qty) + "</span></div>").join("") +
+                (order.discount ? '<div class="summary-row"><span>Discount (' + order.couponCode + ")</span><span>− " + formatTk(order.discount) + "</span></div>" : "") +
+                (order.deliveryCharge ? '<div class="summary-row"><span>Delivery charge</span><span>' + formatTk(order.deliveryCharge) + "</span></div>" : "") +
+                '<div class="summary-row total"><span>Total (' + PAYMENT_LABEL[order.payment] + ")</span><span>" + formatTk(order.total) + "</span></div>";
+        }
+
+        function renderActive() {
+            const active = myOrders().filter(o => !["Delivered", "Completed", "Cancelled"].includes(o.status));
+            document.getElementById("active-orders").innerHTML = active.length
+                ? active.map(o => '<div class="summary-row"><span>#' + o.id + ", " + ORDER_TYPE_LABEL[o.type] + ", " + formatTk(o.total) +
+                    '</span><span>' + statusBadge(o.status) + ' <button type="button" class="btn btn-small btn-outline" onclick="show(' + o.id + ')">View</button></span></div>').join("")
+                : '<p class="muted" style="margin:0">You have no active orders. <a href="menu.html">Order something</a></p>';
+        }
+
+        function show(id) {
+            currentId = String(id);
+            history.replaceState(null, "", "track-order.html?id=" + id);
+            renderOrder();
+        }
+
+        document.getElementById("find-form").addEventListener("submit", function (e) {
+            e.preventDefault();
+            const input = document.getElementById("order-id");
+            clearFormErrors(this);
+            if (!/^[0-9]+$/.test(input.value.trim())) {
+                showFieldError(input, "Enter the order number shown after you placed your order.");
+                return;
+            }
+            show(input.value.trim());
+        });
+
+        if (user) {
+            renderOrder();
+            renderActive();
+            // Polling: check for status changes every 5 seconds
+            setInterval(() => { renderOrder(); renderActive(); }, 5000);
+        }
+    </script>
+</body>
+</html>

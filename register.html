@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create account | Caffinity</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-root="">
+    <header class="site-header">
+        <div class="container header-inner">
+            <a class="brand" href="index.html"><span class="brand-cup" aria-hidden="true">☕</span>Caffinity</a>
+            <button class="nav-toggle" type="button" aria-label="Open menu" aria-expanded="false">☰</button>
+            <nav class="site-nav" aria-label="Main">
+            <a href="index.html">Home</a>
+            <a href="menu.html">Menu</a>
+            <a href="reservation.html">Reserve a table</a>
+            <a href="track-order.html">Track order</a>
+                <a href="cart.html" class="cart-link">Cart <span class="cart-count" id="cart-count" hidden>0</span></a>
+                <div class="account-links" id="account-links"></div>
+            </nav>
+        </div>
+    </header>
+
+    <main class="auth-wrap">
+        <section class="card auth-card">
+            <h1>Create your account</h1>
+            <p class="muted">Customer accounts only. Staff accounts are created by the cafe owner.</p>
+
+            <form id="register-form" novalidate>
+                <div class="form-group">
+                    <label for="name">Full name</label>
+                    <input type="text" id="name" autocomplete="name">
+                    <p class="error"></p>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" autocomplete="email">
+                    <p class="error"></p>
+                </div>
+                <div class="form-group">
+                    <label for="phone">Phone number</label>
+                    <input type="tel" id="phone" placeholder="01XXXXXXXXX" autocomplete="tel">
+                    <p class="error"></p>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" autocomplete="new-password">
+                    <p class="error"></p>
+                </div>
+                <div class="form-group">
+                    <label for="confirm">Confirm password</label>
+                    <input type="password" id="confirm" autocomplete="new-password">
+                    <p class="error"></p>
+                </div>
+                <button type="submit" class="btn btn-block">Create account</button>
+            </form>
+
+            <p class="small center" style="margin-top:16px">Already have an account? <a href="login.html">Log in</a></p>
+        </section>
+    </main>
+
+    <script src="js/data.js"></script>
+    <script src="js/main.js"></script>
+    <script>
+
+        setupPublicHeader();
+
+        document.getElementById("register-form").addEventListener("submit", function (e) {
+            e.preventDefault();
+            clearFormErrors(this);
+            const name = document.getElementById("name");
+            const email = document.getElementById("email");
+            const phone = document.getElementById("phone");
+            const password = document.getElementById("password");
+            const confirm = document.getElementById("confirm");
+            const users = getUsers();
+            let ok = true;
+
+            if (name.value.trim().length < 3) { showFieldError(name, "Enter at least 3 characters."); ok = false; }
+            else if (!/^[A-Za-z .]+$/.test(name.value.trim())) { showFieldError(name, "Use letters, spaces and dots only."); ok = false; }
+
+            if (!isValidEmail(email.value.trim())) { showFieldError(email, "Enter a valid email address."); ok = false; }
+            else if (users.some(u => u.email.toLowerCase() === email.value.trim().toLowerCase())) { showFieldError(email, "An account with this email already exists. Log in instead."); ok = false; }
+
+            if (!isValidPhone(phone.value.trim())) { showFieldError(phone, "Enter an 11-digit number starting with 01."); ok = false; }
+            if (password.value.length < 6) { showFieldError(password, "Use at least 6 characters."); ok = false; }
+            if (confirm.value !== password.value || confirm.value === "") { showFieldError(confirm, "Passwords do not match."); ok = false; }
+            if (!ok) return;
+
+            const user = {
+                id: nextId("user", 6),
+                name: name.value.trim(),
+                email: email.value.trim(),
+                phone: phone.value.trim(),
+                password: password.value,
+                role: "customer",
+                active: true,
+                photo: ""
+            };
+            users.push(user);
+            saveUsers(users);
+            dbSet("session", user.id);
+            location.href = "customer/dashboard.html";
+        });
+    </script>
+</body>
+</html>

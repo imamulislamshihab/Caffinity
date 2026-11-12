@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reserve a table | Caffinity</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-root="">
+    <header class="site-header">
+        <div class="container header-inner">
+            <a class="brand" href="index.html"><span class="brand-cup" aria-hidden="true">☕</span>Caffinity</a>
+            <button class="nav-toggle" type="button" aria-label="Open menu" aria-expanded="false">☰</button>
+            <nav class="site-nav" aria-label="Main">
+            <a href="index.html">Home</a>
+            <a href="menu.html">Menu</a>
+            <a href="reservation.html" class="active" aria-current="page">Reserve a table</a>
+            <a href="track-order.html">Track order</a>
+                <a href="cart.html" class="cart-link">Cart <span class="cart-count" id="cart-count" hidden>0</span></a>
+                <div class="account-links" id="account-links"></div>
+            </nav>
+        </div>
+    </header>
+
+    <main class="page">
+        <div class="container two-col">
+            <section class="card">
+                <h1>Reserve a table</h1>
+                <p class="muted">Send a request and the cafe will approve or decline it. You can see the status below.</p>
+
+                <form id="reserve-form" novalidate>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="date">Date</label>
+                            <input type="date" id="date">
+                            <p class="error"></p>
+                        </div>
+                        <div class="form-group">
+                            <label for="time">Time</label>
+                            <input type="time" id="time">
+                            <p class="error"></p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="guests">Number of guests</label>
+                        <input type="number" id="guests" min="1" max="12" value="2">
+                        <p class="error"></p>
+                    </div>
+                    <div class="form-group">
+                        <label for="note">Special request (optional)</label>
+                        <textarea id="note" placeholder="Birthday, window seat, high chair..."></textarea>
+                    </div>
+                    <button type="submit" class="btn">Request reservation</button>
+                </form>
+            </section>
+
+            <aside class="card">
+                <h2 class="card-title">Your reservations</h2>
+                <div id="my-reservations"></div>
+            </aside>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container row-between">
+            <span>© 2026 Caffinity. Coffee, comfort food and more.</span>
+            <span><a href="menu.html">Menu</a> &nbsp; <a href="reservation.html">Reservations</a> &nbsp; <a href="login.html">Staff login</a></span>
+        </div>
+    </footer>
+    <script src="js/data.js"></script>
+    <script src="js/main.js"></script>
+    <script>
+
+        setupPublicHeader();
+        const settings = dbGet("settings", {});
+        const dateInput = document.getElementById("date");
+        dateInput.min = new Date().toISOString().slice(0, 10);
+
+        function renderMine() {
+            const user = currentUser();
+            const box = document.getElementById("my-reservations");
+            if (!user || user.role !== "customer") {
+                box.innerHTML = '<p class="muted">Log in to see your reservations.</p><a class="btn btn-outline btn-small" href="login.html?next=reservation.html">Log in</a>';
+                return;
+            }
+            const mine = dbGet("reservations", []).filter(r => r.customerId === user.id).sort((a, b) => b.id - a.id);
+            box.innerHTML = mine.length
+                ? mine.map(r => '<div class="summary-row"><span>' + formatDate(r.date) + ", " + formatTime12(r.time) + "<br>" +
+                    '<span class="muted small">' + r.guests + " guests</span></span><span>" + statusBadge(r.status) + "</span></div>").join("")
+                : '<p class="muted" style="margin:0">No reservations yet.</p>';
+        }
+
+        document.getElementById("reserve-form").addEventListener("submit", function (e) {
+            e.preventDefault();
+            const user = currentUser();
+            if (!user || user.role !== "customer") {
+                location.href = "login.html?next=reservation.html";
+                return;
+            }
+            clearFormErrors(this);
+            const time = document.getElementById("time");
+            const guests = document.getElementById("guests");
+            let ok = true;
+
+            const today = new Date().toISOString().slice(0, 10);
+            if (!dateInput.value) { showFieldError(dateInput, "Choose a date."); ok = false; }
+            else if (dateInput.value < today) { showFieldError(dateInput, "Choose today or a future date."); ok = false; }
+
+            if (!time.value) { showFieldError(time, "Choose a time."); ok = false; }
+            else if (time.value < settings.openingTime || time.value >= settings.closingTime) {
+                showFieldError(time, "Choose a time between " + formatTime12(settings.openingTime) + " and " + formatTime12(settings.closingTime) + ".");
+                ok = false;
+            }
+            const g = Number(guests.value);
+            if (!(g >= 1 && g <= 12)) { showFieldError(guests, "Enter between 1 and 12 guests. For larger groups, call the cafe."); ok = false; }
+            if (!ok) return;
+
+            const list = dbGet("reservations", []);
+            list.push({
+                id: nextId("reservation", 1),
+                customerId: user.id, customerName: user.name, phone: user.phone,
+                date: dateInput.value, time: time.value, guests: g,
+                note: document.getElementById("note").value.trim(),
+                status: "Pending"
+            });
+            dbSet("reservations", list);
+            this.reset();
+            guests.value = 2;
+            toast("Reservation requested. The cafe will confirm it soon.", "success");
+            renderMine();
+        });
+
+        renderMine();
+    </script>
+</body>
+</html>

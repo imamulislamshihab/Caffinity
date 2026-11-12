@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu | Caffinity</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-root="">
+    <header class="site-header">
+        <div class="container header-inner">
+            <a class="brand" href="index.html"><span class="brand-cup" aria-hidden="true">☕</span>Caffinity</a>
+            <button class="nav-toggle" type="button" aria-label="Open menu" aria-expanded="false">☰</button>
+            <nav class="site-nav" aria-label="Main">
+            <a href="index.html">Home</a>
+            <a href="menu.html" class="active" aria-current="page">Menu</a>
+            <a href="reservation.html">Reserve a table</a>
+            <a href="track-order.html">Track order</a>
+                <a href="cart.html" class="cart-link">Cart <span class="cart-count" id="cart-count" hidden>0</span></a>
+                <div class="account-links" id="account-links"></div>
+            </nav>
+        </div>
+    </header>
+
+    <main class="page">
+        <div class="container">
+            <div class="page-head">
+                <h1>Our menu</h1>
+                <p>Freshly made coffee, snacks, meals and desserts.</p>
+            </div>
+
+            <div class="table-banner hidden" id="table-banner"></div>
+            <div class="table-banner hidden" id="closed-banner" style="background:var(--red-soft);border-color:#E9C2BE"></div>
+
+            <div class="menu-tools">
+                <input type="text" id="search" aria-label="Search menu" placeholder="Search coffee, burgers, cake...">
+                <div class="chips" id="chips"></div>
+            </div>
+
+            <div class="menu-grid" id="menu-grid"></div>
+            <p class="empty hidden" id="no-results">No items match your search. Try another word or category.</p>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container row-between">
+            <span>© 2026 Caffinity. Coffee, comfort food and more.</span>
+            <span><a href="menu.html">Menu</a> &nbsp; <a href="reservation.html">Reservations</a> &nbsp; <a href="login.html">Staff login</a></span>
+        </div>
+    </footer>
+    <script src="js/data.js"></script>
+    <script src="js/main.js"></script>
+    <script>
+
+        setupPublicHeader();
+
+        const categories = dbGet("categories", []);
+        const menu = dbGet("menu", []);
+        let activeCategory = 0;   // 0 = All
+
+        // Dine-in: the table QR code opens menu.html?table=4
+        const params = new URLSearchParams(location.search);
+        if (params.get("table")) dbSet("dine_table", params.get("table"));
+        const table = dbGet("dine_table", null);
+        if (table) {
+            const banner = document.getElementById("table-banner");
+            banner.classList.remove("hidden");
+            banner.innerHTML = "You are ordering for Table " + escapeHtml(table) +
+                '. Your order will be sent to the kitchen. <button type="button" class="link-btn" style="color:var(--caramel)" onclick="leaveTable()">Not at the cafe?</button>';
+        }
+        function leaveTable() {
+            localStorage.removeItem("caffinity_dine_table");
+            location.href = "menu.html";
+        }
+
+        if (!isCafeOpen()) {
+            const s = dbGet("settings", {});
+            const closed = document.getElementById("closed-banner");
+            closed.classList.remove("hidden");
+            closed.textContent = "We are closed right now. You can browse the menu, and orders open again at " + formatTime12(s.openingTime) + ".";
+        }
+
+        function renderChips() {
+            const all = [{ id: 0, name: "All" }].concat(categories);
+            document.getElementById("chips").innerHTML = all.map(c =>
+                '<button type="button" class="chip' + (c.id === activeCategory ? " active" : "") +
+                '" onclick="selectCategory(' + c.id + ')">' + escapeHtml(c.name) + "</button>").join("");
+        }
+
+        function selectCategory(id) {
+            activeCategory = id;
+            renderChips();
+            renderMenu();
+        }
+
+        function renderMenu() {
+            const term = document.getElementById("search").value.trim().toLowerCase();
+            const items = menu.filter(m =>
+                (activeCategory === 0 || m.categoryId === activeCategory) &&
+                (m.name.toLowerCase().includes(term) || m.description.toLowerCase().includes(term)));
+            document.getElementById("menu-grid").innerHTML = items.map(menuCardHtml).join("");
+            document.getElementById("no-results").classList.toggle("hidden", items.length > 0);
+        }
+
+        document.getElementById("search").addEventListener("input", renderMenu);
+        renderChips();
+        renderMenu();
+    </script>
+</body>
+</html>
